@@ -1,5 +1,7 @@
 import { useState, useCallback } from "react";
 
+// ─── MODEL DATA ──────────────────────────────────────────────
+
 const MODELS = {
   opus: {
     name: "Claude 4.5 Opus",
@@ -80,6 +82,72 @@ const MODELS = {
     aider: "82.4%",
   },
 };
+
+// ─── COST CALCULATOR DATA ────────────────────────────────────
+
+const COST_NUMERIC = {
+  opus: 0.44,
+  sonnet: 0.30,
+  gpt: 0.35,
+  geminiPro: 0.22,
+  flash: 0.08,
+  sonnet1m: 0.40,
+};
+
+const TASK_CATEGORIES = [
+  { key: "simpleEdits", label: "Simple Edits", desc: "Quick fixes, boilerplate, configs", icon: "\u26A1", recommended: "flash" },
+  { key: "routineCoding", label: "Routine Coding", desc: "Features, APIs, CRUD, tests", icon: "\u{1F4BB}", recommended: "sonnet" },
+  { key: "debugging", label: "Debugging", desc: "Bug fixes, error investigation", icon: "\u{1F41B}", recommended: "sonnet" },
+  { key: "architecture", label: "Architecture", desc: "System design, tech decisions", icon: "\u{1F3D7}\uFE0F", recommended: "opus" },
+  { key: "math", label: "Math / Reasoning", desc: "Algorithms, calculations", icon: "\u{1F9EE}", recommended: "gpt" },
+  { key: "writing", label: "Writing", desc: "Docs, marketing, creative", icon: "\u270D\uFE0F", recommended: "sonnet" },
+];
+
+// ─── BENCHMARK DATA ──────────────────────────────────────────
+
+const BENCHMARKS = {
+  swe: {
+    name: "SWE-bench Verified",
+    short: "SWE-bench",
+    description: "Real-world GitHub issue resolution",
+    detail: "Models are given actual resolved GitHub issues from popular open-source projects and must produce working patches. Measures the ability to understand issue context, trace through code, identify root causes, and implement correct fixes across real codebases.",
+    weight: "High \u2014 directly reflects real development work",
+    scoring: "Percentage of issues correctly resolved end-to-end",
+    scores: { opus: 74.4, sonnet: 70.6, gpt: 70.4, geminiPro: 74.2, flash: 63.8, sonnet1m: 70.6 },
+  },
+  aider: {
+    name: "Aider Benchmark",
+    short: "Aider",
+    description: "Multi-language code editing performance",
+    detail: "Tests models on end-to-end code editing tasks across Python, JavaScript, TypeScript, and other languages. Models must make coherent, targeted changes to existing code while preserving surrounding context and functionality.",
+    weight: "High \u2014 reflects actual daily editing work",
+    scoring: "Percentage of edits that produce correct, working code",
+    scores: { opus: 78, sonnet: 82.4, gpt: 88, geminiPro: 75, flash: 70, sonnet1m: 82.4 },
+  },
+  terminal: {
+    name: "Terminal-Bench 2.0",
+    short: "Terminal",
+    description: "Terminal and bash operation capability",
+    detail: "Evaluates the ability to write and debug shell scripts, manage file systems, and work with CLI tools. Important for DevOps tasks, infrastructure setup, and any workflow that involves terminal-heavy operations.",
+    weight: "Medium \u2014 relevant for DevOps and infrastructure work",
+    scoring: "Success rate on terminal operation challenges",
+    scores: { opus: 90, sonnet: 82, gpt: 75, geminiPro: 72, flash: 65, sonnet1m: 82 },
+  },
+  aime: {
+    name: "AIME 2025",
+    short: "AIME",
+    description: "Advanced mathematical reasoning",
+    detail: "The American Invitational Mathematics Examination tests contest-level mathematical problem solving. Problems require multi-step reasoning, creative insight, and precise calculation. GPT-5.2 achieved a perfect 100%, making it the standout for math-heavy work.",
+    weight: "Medium \u2014 only relevant for math-heavy tasks",
+    scoring: "Percentage of contest problems solved correctly",
+    scores: { opus: 85, sonnet: 72, gpt: 100, geminiPro: 65, flash: 48, sonnet1m: 72 },
+  },
+};
+
+const BENCHMARK_ORDER = ["swe", "aider", "terminal", "aime"];
+const CALC_MODELS = ["opus", "sonnet", "gpt", "geminiPro", "flash"];
+
+// ─── DECISION TREE ───────────────────────────────────────────
 
 const TREE = {
   start: {
@@ -166,6 +234,8 @@ const TREE = {
     ],
   },
 };
+
+// ─── RESULTS ─────────────────────────────────────────────────
 
 const RESULTS = {
   architecture: {
@@ -340,13 +410,11 @@ const RESULTS = {
 
 const ALL_MODELS_ORDER = ["opus", "sonnet", "gpt", "geminiPro", "flash", "sonnet1m"];
 
+// ─── SHARED COMPONENTS ───────────────────────────────────────
+
 function Badge({ text, color, bg }) {
   return (
-    <span
-      style={{ background: bg, color, fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 999, letterSpacing: 0.3 }}
-    >
-      {text}
-    </span>
+    <span style={{ background: bg, color, fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 999, letterSpacing: 0.3 }}>{text}</span>
   );
 }
 
@@ -358,18 +426,10 @@ function OptionCard({ icon, label, desc, onClick, index }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 14,
-        width: "100%",
-        padding: "14px 18px",
-        border: hovered ? "1.5px solid #6366F1" : "1.5px solid #E5E7EB",
-        borderRadius: 12,
-        background: hovered ? "#F5F3FF" : "#fff",
-        cursor: "pointer",
-        textAlign: "left",
-        transition: "all 0.15s ease",
-        transform: hovered ? "translateY(-1px)" : "none",
+        display: "flex", alignItems: "center", gap: 14, width: "100%", padding: "14px 18px",
+        border: hovered ? "1.5px solid #6366F1" : "1.5px solid #E5E7EB", borderRadius: 12,
+        background: hovered ? "#F5F3FF" : "#fff", cursor: "pointer", textAlign: "left",
+        transition: "all 0.15s ease", transform: hovered ? "translateY(-1px)" : "none",
         boxShadow: hovered ? "0 4px 12px rgba(99,102,241,0.10)" : "0 1px 3px rgba(0,0,0,0.04)",
         animation: `fadeSlideIn 0.25s ease ${index * 0.04}s both`,
       }}
@@ -388,22 +448,12 @@ function Breadcrumbs({ path, onNavigate }) {
   if (path.length === 0) return null;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 20, fontSize: 13 }}>
-      <button
-        onClick={() => onNavigate(-1)}
-        style={{ background: "none", border: "none", color: "#6366F1", cursor: "pointer", fontWeight: 500, padding: "2px 4px", borderRadius: 4 }}
-      >
-        Start
-      </button>
+      <button onClick={() => onNavigate(-1)} style={{ background: "none", border: "none", color: "#6366F1", cursor: "pointer", fontWeight: 500, padding: "2px 4px", borderRadius: 4 }}>Start</button>
       {path.map((step, i) => (
         <span key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
           {i < path.length - 1 ? (
-            <button
-              onClick={() => onNavigate(i)}
-              style={{ background: "none", border: "none", color: "#6366F1", cursor: "pointer", fontWeight: 500, padding: "2px 4px", borderRadius: 4 }}
-            >
-              {step.choiceLabel}
-            </button>
+            <button onClick={() => onNavigate(i)} style={{ background: "none", border: "none", color: "#6366F1", cursor: "pointer", fontWeight: 500, padding: "2px 4px", borderRadius: 4 }}>{step.choiceLabel}</button>
           ) : (
             <span style={{ color: "#374151", fontWeight: 600 }}>{step.choiceLabel}</span>
           )}
@@ -418,10 +468,8 @@ function ModelCard({ modelKey, highlighted }) {
   return (
     <div style={{
       border: highlighted ? `2px solid ${m.color}` : "1.5px solid #E5E7EB",
-      borderRadius: 14,
-      padding: 20,
-      background: highlighted ? m.bg + "40" : "#fff",
-      transition: "all 0.2s",
+      borderRadius: 14, padding: 20,
+      background: highlighted ? m.bg + "40" : "#fff", transition: "all 0.2s",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <div style={{ width: 10, height: 10, borderRadius: "50%", background: m.color, flexShrink: 0 }} />
@@ -443,28 +491,349 @@ function ModelCard({ modelKey, highlighted }) {
   );
 }
 
-function ResultView({ resultKey, onReset, onNavigate, path }) {
+// ─── TAB BAR ─────────────────────────────────────────────────
+
+const TABS = [
+  { key: "wizard", label: "Wizard", icon: "M12 2L2 7l10 5 10-5-10-5z|M2 17l10 5 10-5|M2 12l10 5 10-5" },
+  { key: "calculator", label: "Calculator", icon: "M12 1v22|M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
+  { key: "benchmarks", label: "Benchmarks", icon: "M18 20V10|M12 20V4|M6 20v-6" },
+];
+
+function TabBar({ activeTab, onChange }) {
+  return (
+    <div style={{ display: "flex", background: "#fff", borderRadius: 12, border: "1.5px solid #E5E7EB", marginBottom: 24, overflow: "hidden" }}>
+      {TABS.map((tab) => (
+        <button
+          key={tab.key}
+          onClick={() => onChange(tab.key)}
+          style={{
+            flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            padding: "12px 8px", border: "none", cursor: "pointer",
+            background: activeTab === tab.key ? "#6366F1" : "transparent",
+            color: activeTab === tab.key ? "#fff" : "#6B7280",
+            fontWeight: activeTab === tab.key ? 600 : 500,
+            fontSize: 13, transition: "all 0.15s ease",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {tab.icon.split("|").map((d, i) => <path key={i} d={d} />)}
+          </svg>
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── COST CALCULATOR ─────────────────────────────────────────
+
+function TaskSlider({ cat, value, onChange }) {
+  return (
+    <div style={{ background: "#fff", border: "1.5px solid #E5E7EB", borderRadius: 12, padding: "14px 16px", animation: "fadeSlideIn 0.25s ease both" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 20 }}>{cat.icon}</span>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: "#1F2937" }}>{cat.label}</div>
+            <div style={{ fontSize: 11, color: "#9CA3AF" }}>{cat.desc}</div>
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontWeight: 700, fontSize: 18, color: "#6366F1" }}>{value}</div>
+          <div style={{ fontSize: 10, color: "#9CA3AF" }}>tasks/day</div>
+        </div>
+      </div>
+      <input
+        type="range" min="0" max="50" value={value} onChange={(e) => onChange(parseInt(e.target.value))}
+        style={{ width: "100%", height: 6, accentColor: "#6366F1", cursor: "pointer" }}
+      />
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#D1D5DB", marginTop: 2 }}>
+        <span>0</span><span>25</span><span>50</span>
+      </div>
+    </div>
+  );
+}
+
+function CostCalculatorView({ tasksPerDay, setTasksPerDay }) {
+  const totalTasks = Object.values(tasksPerDay).reduce((s, v) => s + v, 0);
+
+  const tieredMonthly = TASK_CATEGORIES.reduce((sum, cat) => {
+    return sum + tasksPerDay[cat.key] * COST_NUMERIC[cat.recommended] * 30;
+  }, 0);
+
+  const singleModelCosts = CALC_MODELS.map((key) => ({
+    key,
+    model: MODELS[key],
+    monthly: totalTasks * COST_NUMERIC[key] * 30,
+  })).sort((a, b) => a.monthly - b.monthly);
+
+  const mostExpensive = singleModelCosts[singleModelCosts.length - 1]?.monthly || 0;
+  const savings = mostExpensive > 0 ? ((mostExpensive - tieredMonthly) / mostExpensive * 100) : 0;
+
+  return (
+    <div style={{ animation: "fadeSlideIn 0.3s ease both" }}>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ fontSize: 19, fontWeight: 700, color: "#1F2937", marginBottom: 4 }}>Cost Calculator</h2>
+        <p style={{ fontSize: 13, color: "#9CA3AF" }}>Set your daily task volume per category to estimate monthly spend</p>
+      </div>
+
+      <div style={{ display: "grid", gap: 10, marginBottom: 24 }}>
+        {TASK_CATEGORIES.map((cat) => (
+          <TaskSlider
+            key={cat.key} cat={cat} value={tasksPerDay[cat.key]}
+            onChange={(v) => setTasksPerDay((prev) => ({ ...prev, [cat.key]: v }))}
+          />
+        ))}
+      </div>
+
+      {totalTasks > 0 && (
+        <>
+          <div style={{
+            border: "2px solid #6366F1", borderRadius: 16, padding: 20,
+            background: "linear-gradient(135deg, #EEF2FF, #E0E7FF)", marginBottom: 16,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#6366F1", textTransform: "uppercase", letterSpacing: 1 }}>Tiered Approach</div>
+                <div style={{ fontSize: 12, color: "#6B7280" }}>Right model for each task type</div>
+              </div>
+              {savings > 0 && (
+                <div style={{ background: "#059669", color: "#fff", padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
+                  Save {savings.toFixed(0)}%
+                </div>
+              )}
+            </div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: "#1F2937", marginBottom: 12 }}>
+              ${tieredMonthly.toFixed(2)}<span style={{ fontSize: 14, fontWeight: 500, color: "#6B7280" }}>/month</span>
+            </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {TASK_CATEGORIES.filter((cat) => tasksPerDay[cat.key] > 0).map((cat) => {
+                const m = MODELS[cat.recommended];
+                const cost = tasksPerDay[cat.key] * COST_NUMERIC[cat.recommended] * 30;
+                return (
+                  <div key={cat.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "#4B5563" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: m.color, flexShrink: 0 }} />
+                      <span>{cat.label}</span>
+                      <span style={{ color: "#9CA3AF" }}>\u2192 {m.name.split(" ").pop()}</span>
+                    </div>
+                    <span style={{ fontWeight: 600 }}>${cost.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#6B7280", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            vs. Single Model for Everything
+          </div>
+          <div style={{ display: "grid", gap: 8, marginBottom: 8 }}>
+            {singleModelCosts.map(({ key, model, monthly }) => {
+              const barWidth = mostExpensive > 0 ? (monthly / mostExpensive * 100) : 0;
+              return (
+                <div key={key} style={{ background: "#fff", border: "1.5px solid #E5E7EB", borderRadius: 10, padding: "10px 14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: model.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "#1F2937" }}>{model.name}</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: monthly > tieredMonthly ? "#DC2626" : "#059669" }}>
+                      ${monthly.toFixed(2)}
+                    </span>
+                  </div>
+                  <div style={{ height: 6, background: "#F3F4F6", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${barWidth}%`, background: model.color, borderRadius: 3, transition: "width 0.3s ease" }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center" }}>
+            {totalTasks} tasks/day \u00D7 30 days \u00B7 GPT-5.2 estimated at $0.35/task
+          </div>
+        </>
+      )}
+
+      {totalTasks === 0 && (
+        <div style={{ textAlign: "center", padding: "40px 20px", color: "#9CA3AF" }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>💰</div>
+          <div style={{ fontSize: 14 }}>Move the sliders above to see cost estimates</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── BENCHMARK COMPONENTS ────────────────────────────────────
+
+function BenchmarkBar({ benchKey, highlightModel }) {
+  const bench = BENCHMARKS[benchKey];
+  const maxScore = Math.max(...Object.values(bench.scores));
+  const sortedModels = Object.entries(bench.scores)
+    .sort(([, a], [, b]) => b - a);
+
+  return (
+    <div style={{ display: "grid", gap: 6 }}>
+      {sortedModels.map(([modelKey, score]) => {
+        const m = MODELS[modelKey];
+        if (!m) return null;
+        const pct = maxScore > 0 ? (score / maxScore * 100) : 0;
+        const isHighlighted = modelKey === highlightModel;
+        return (
+          <div key={modelKey} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 80, fontSize: 11, color: isHighlighted ? "#1F2937" : "#6B7280", fontWeight: isHighlighted ? 700 : 500, textAlign: "right", flexShrink: 0 }}>
+              {m.name.split(" ").slice(-1)[0]}
+            </div>
+            <div style={{ flex: 1, height: 20, background: "#F3F4F6", borderRadius: 6, overflow: "hidden", position: "relative" }}>
+              <div style={{
+                height: "100%", width: `${pct}%`, background: m.color,
+                borderRadius: 6, transition: "width 0.4s ease",
+                opacity: isHighlighted ? 1 : 0.6,
+              }} />
+              <span style={{
+                position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                fontSize: 11, fontWeight: 700, color: pct > 60 ? "#fff" : "#374151",
+              }}>
+                {typeof score === "number" ? `${score}%` : score}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function BenchmarkModal({ benchKey, onClose, highlightModel }) {
+  const bench = BENCHMARKS[benchKey];
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000,
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+        animation: "fadeSlideIn 0.2s ease both",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff", borderRadius: 16, padding: 24, maxWidth: 480, width: "100%",
+          maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: "#1F2937" }}>{bench.name}</div>
+            <div style={{ fontSize: 13, color: "#6366F1", fontWeight: 500 }}>{bench.description}</div>
+          </div>
+          <button onClick={onClose} style={{ background: "#F3F4F6", border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <div style={{ background: "#F9FAFB", borderRadius: 12, padding: 16, marginBottom: 16, fontSize: 13, color: "#374151", lineHeight: 1.6 }}>
+          {bench.detail}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
+          <div style={{ background: "#EEF2FF", borderRadius: 10, padding: "10px 14px" }}>
+            <div style={{ fontSize: 10, color: "#6366F1", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Relevance</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1F2937", marginTop: 2 }}>{bench.weight}</div>
+          </div>
+          <div style={{ background: "#F0FDF4", borderRadius: 10, padding: "10px 14px" }}>
+            <div style={{ fontSize: 10, color: "#059669", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Scoring</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1F2937", marginTop: 2 }}>{bench.scoring}</div>
+          </div>
+        </div>
+
+        <div style={{ fontWeight: 600, fontSize: 14, color: "#1F2937", marginBottom: 10 }}>Model Comparison</div>
+        <BenchmarkBar benchKey={benchKey} highlightModel={highlightModel} />
+      </div>
+    </div>
+  );
+}
+
+function BenchmarkExplorerView({ onSelectBenchmark }) {
+  return (
+    <div style={{ animation: "fadeSlideIn 0.3s ease both" }}>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ fontSize: 19, fontWeight: 700, color: "#1F2937", marginBottom: 4 }}>Benchmark Explorer</h2>
+        <p style={{ fontSize: 13, color: "#9CA3AF" }}>Tap any benchmark to see what it measures and how models compare</p>
+      </div>
+
+      <div style={{ display: "grid", gap: 14 }}>
+        {BENCHMARK_ORDER.map((benchKey, idx) => {
+          const bench = BENCHMARKS[benchKey];
+          const topModel = Object.entries(bench.scores).sort(([, a], [, b]) => b - a)[0];
+          const topM = MODELS[topModel[0]];
+          return (
+            <button
+              key={benchKey}
+              onClick={() => onSelectBenchmark(benchKey)}
+              style={{
+                background: "#fff", border: "1.5px solid #E5E7EB", borderRadius: 14, padding: 18,
+                cursor: "pointer", textAlign: "left", transition: "all 0.15s",
+                animation: `fadeSlideIn 0.25s ease ${idx * 0.05}s both`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: "#1F2937" }}>{bench.name}</div>
+                  <div style={{ fontSize: 12, color: "#6B7280" }}>{bench.description}</div>
+                </div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 11, color: "#9CA3AF" }}>Leader:</span>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: topM.color }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#1F2937" }}>{topM.name}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: topM.color }}>{topModel[1]}%</span>
+              </div>
+
+              <BenchmarkBar benchKey={benchKey} />
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: 16, marginTop: 18, display: "flex", gap: 10 }}>
+        <span style={{ fontSize: 18, lineHeight: 1 }}>💡</span>
+        <div style={{ fontSize: 13, color: "#92400E", lineHeight: 1.5 }}>
+          <strong>Reading benchmarks:</strong> No single benchmark tells the full story. SWE-bench and Aider reflect day-to-day coding most directly. AIME matters mainly for math-heavy work. Consider cost alongside performance.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── RESULT VIEW (with tappable benchmarks) ──────────────────
+
+function ResultView({ resultKey, onReset, onNavigate, path, onSelectBenchmark }) {
   const r = RESULTS[resultKey];
   const m = MODELS[r.model];
   const [showAll, setShowAll] = useState(false);
+
+  const benchScoreItems = [
+    { label: "Cost", value: m.cost, benchKey: null },
+    { label: "Speed", value: m.speed, benchKey: null },
+    { label: "SWE-bench", value: m.swe, benchKey: "swe" },
+    { label: "Aider", value: m.aider, benchKey: "aider" },
+  ];
 
   return (
     <div style={{ animation: "fadeSlideIn 0.3s ease both" }}>
       <Breadcrumbs path={path} onNavigate={onNavigate} />
 
       <div style={{ textAlign: "center", marginBottom: 24 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#6366F1", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 6 }}>
-          Recommended Model
-        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#6366F1", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 6 }}>Recommended Model</div>
         <div style={{ fontSize: 13, color: "#6B7280" }}>{r.title}</div>
       </div>
 
       <div style={{
-        border: `2px solid ${m.color}`,
-        borderRadius: 16,
-        padding: 24,
-        background: `linear-gradient(135deg, ${m.bg}30, ${m.bg}60)`,
-        marginBottom: 20,
+        border: `2px solid ${m.color}`, borderRadius: 16, padding: 24,
+        background: `linear-gradient(135deg, ${m.bg}30, ${m.bg}60)`, marginBottom: 20,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: m.color, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -477,16 +846,31 @@ function ResultView({ resultKey, onReset, onNavigate, path }) {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 18 }}>
-          {[
-            { label: "Cost", value: m.cost },
-            { label: "Speed", value: m.speed },
-            { label: "Context", value: m.context },
-            { label: "SWE-bench", value: m.swe },
-          ].map((item, i) => (
-            <div key={i} style={{ background: "rgba(255,255,255,0.7)", borderRadius: 10, padding: "10px 14px" }}>
-              <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{item.label}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "#1F2937", marginTop: 2 }}>{item.value}</div>
-            </div>
+          {benchScoreItems.map((item, i) => (
+            item.benchKey ? (
+              <button
+                key={i}
+                onClick={() => onSelectBenchmark(item.benchKey)}
+                style={{
+                  background: "rgba(255,255,255,0.7)", borderRadius: 10, padding: "10px 14px",
+                  border: "1.5px solid transparent", cursor: "pointer", textAlign: "left",
+                  transition: "border-color 0.15s",
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.borderColor = "#6366F1"}
+                onMouseLeave={(e) => e.currentTarget.style.borderColor = "transparent"}
+              >
+                <div style={{ fontSize: 11, color: "#6366F1", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, display: "flex", alignItems: "center", gap: 4 }}>
+                  {item.label}
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6366F1" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#1F2937", marginTop: 2 }}>{item.value}</div>
+              </button>
+            ) : (
+              <div key={i} style={{ background: "rgba(255,255,255,0.7)", borderRadius: 10, padding: "10px 14px" }}>
+                <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{item.label}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#1F2937", marginTop: 2 }}>{item.value}</div>
+              </div>
+            )
           ))}
         </div>
 
@@ -529,55 +913,26 @@ function ResultView({ resultKey, onReset, onNavigate, path }) {
         )}
       </div>
 
-      <button
-        onClick={() => setShowAll(!showAll)}
-        style={{
-          width: "100%",
-          padding: "12px",
-          border: "1.5px solid #E5E7EB",
-          borderRadius: 10,
-          background: "#fff",
-          cursor: "pointer",
-          fontSize: 13,
-          fontWeight: 600,
-          color: "#6366F1",
-          marginBottom: 12,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 6,
-        }}
-      >
+      <button onClick={() => setShowAll(!showAll)} style={{
+        width: "100%", padding: "12px", border: "1.5px solid #E5E7EB", borderRadius: 10, background: "#fff",
+        cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#6366F1", marginBottom: 12,
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+      }}>
         {showAll ? "Hide" : "View"} Full Model Comparison
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: showAll ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}><path d="M6 9l6 6 6-6"/></svg>
       </button>
 
       {showAll && (
         <div style={{ display: "grid", gap: 10, marginBottom: 16, animation: "fadeSlideIn 0.25s ease both" }}>
-          {ALL_MODELS_ORDER.map((key) => (
-            <ModelCard key={key} modelKey={key} highlighted={key === r.model} />
-          ))}
+          {ALL_MODELS_ORDER.map((key) => <ModelCard key={key} modelKey={key} highlighted={key === r.model} />)}
         </div>
       )}
 
-      <button
-        onClick={onReset}
-        style={{
-          width: "100%",
-          padding: "14px",
-          border: "none",
-          borderRadius: 10,
-          background: "#6366F1",
-          color: "#fff",
-          cursor: "pointer",
-          fontSize: 14,
-          fontWeight: 600,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 8,
-        }}
-      >
+      <button onClick={onReset} style={{
+        width: "100%", padding: "14px", border: "none", borderRadius: 10, background: "#6366F1",
+        color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+      }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
         Start Over
       </button>
@@ -585,10 +940,17 @@ function ResultView({ resultKey, onReset, onNavigate, path }) {
   );
 }
 
+// ─── MAIN APP ────────────────────────────────────────────────
+
 export default function CursorModelSelector() {
   const [currentNode, setCurrentNode] = useState("start");
   const [path, setPath] = useState([]);
   const [resultKey, setResultKey] = useState(null);
+  const [activeTab, setActiveTab] = useState("wizard");
+  const [selectedBenchmark, setSelectedBenchmark] = useState(null);
+  const [tasksPerDay, setTasksPerDay] = useState({
+    simpleEdits: 0, routineCoding: 0, debugging: 0, architecture: 0, math: 0, writing: 0,
+  });
 
   const handleSelect = useCallback((option) => {
     const newPath = [...path, { nodeId: currentNode, choiceLabel: option.label }];
@@ -601,27 +963,19 @@ export default function CursorModelSelector() {
     }
   }, [path, currentNode]);
 
-  const navigateTo = useCallback((index) => {
-    if (index === -1) {
-      setPath([]);
-      setCurrentNode("start");
-      setResultKey(null);
-    } else {
-      const newPath = path.slice(0, index + 1);
-      const targetStep = path[index + 1];
-      if (targetStep) {
-        setPath(newPath);
-        setCurrentNode(path[index + 1]?.nodeId || "start");
-        setResultKey(null);
-      }
-    }
-  }, [path]);
-
   const reset = useCallback(() => {
     setPath([]);
     setCurrentNode("start");
     setResultKey(null);
   }, []);
+
+  const handleBreadcrumbNav = useCallback((idx) => {
+    if (idx === -1) { reset(); return; }
+    const nextNodeId = path[idx + 1]?.nodeId;
+    setPath(path.slice(0, idx + 1));
+    setCurrentNode(nextNodeId || path[idx]?.nodeId || "start");
+    setResultKey(null);
+  }, [path, reset]);
 
   const node = TREE[currentNode];
 
@@ -634,81 +988,83 @@ export default function CursorModelSelector() {
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         button:hover { opacity: 0.95; }
+        input[type=range] { -webkit-appearance: none; appearance: none; background: #E5E7EB; border-radius: 3px; outline: none; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #6366F1; cursor: pointer; border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
       `}</style>
+
       <div style={{ maxWidth: 560, margin: "0 auto", padding: "32px 20px 40px" }}>
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
           <div style={{
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg, #6366F1, #8B5CF6)",
-            marginBottom: 14, boxShadow: "0 4px 14px rgba(99,102,241,0.25)"
+            marginBottom: 14, boxShadow: "0 4px 14px rgba(99,102,241,0.25)",
           }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1F2937", marginBottom: 4 }}>Cursor Model Selector</h1>
-          <p style={{ fontSize: 14, color: "#6B7280" }}>Answer a few questions to find the optimal model for your task</p>
+          <p style={{ fontSize: 14, color: "#6B7280" }}>Find the optimal model for your task, estimate costs, and explore benchmarks</p>
         </div>
 
-        {resultKey ? (
-          <ResultView resultKey={resultKey} onReset={reset} path={path} onNavigate={(idx) => {
-            if (idx === -1) { reset(); return; }
-            const nextNodeId = path[idx + 1]?.nodeId;
-            setPath(path.slice(0, idx + 1));
-            setCurrentNode(nextNodeId || path[idx]?.nodeId || "start");
-            setResultKey(null);
-          }} />
-        ) : (
-          <div style={{ animation: "fadeSlideIn 0.3s ease both" }}>
-            <Breadcrumbs path={path} onNavigate={(idx) => {
-              if (idx === -1) { reset(); return; }
-              const targetNodeId = path[idx + 1]?.nodeId;
-              setPath(path.slice(0, idx + 1));
-              setCurrentNode(targetNodeId || path[idx]?.nodeId || "start");
-              setResultKey(null);
-            }} />
+        <TabBar activeTab={activeTab} onChange={setActiveTab} />
 
-            <div style={{ marginBottom: 20 }}>
-              <h2 style={{ fontSize: 19, fontWeight: 700, color: "#1F2937", marginBottom: 4 }}>{node.question}</h2>
-              <p style={{ fontSize: 13, color: "#9CA3AF" }}>{node.subtitle}</p>
+        {activeTab === "wizard" && (
+          resultKey ? (
+            <ResultView
+              resultKey={resultKey} onReset={reset} path={path}
+              onNavigate={handleBreadcrumbNav}
+              onSelectBenchmark={(key) => setSelectedBenchmark(key)}
+            />
+          ) : (
+            <div style={{ animation: "fadeSlideIn 0.3s ease both" }}>
+              <Breadcrumbs path={path} onNavigate={handleBreadcrumbNav} />
+              <div style={{ marginBottom: 20 }}>
+                <h2 style={{ fontSize: 19, fontWeight: 700, color: "#1F2937", marginBottom: 4 }}>{node.question}</h2>
+                <p style={{ fontSize: 13, color: "#9CA3AF" }}>{node.subtitle}</p>
+              </div>
+              <div style={{ display: "grid", gap: 10 }}>
+                {node.options.map((opt, i) => (
+                  <OptionCard key={opt.label} icon={opt.icon} label={opt.label} desc={opt.desc} onClick={() => handleSelect(opt)} index={i} />
+                ))}
+              </div>
+              {path.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (path.length <= 1) { reset(); return; }
+                    const prev = path[path.length - 1];
+                    setPath(path.slice(0, -1));
+                    setCurrentNode(prev.nodeId);
+                    setResultKey(null);
+                  }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, margin: "18px auto 0", background: "none", border: "none", color: "#6B7280", cursor: "pointer", fontSize: 13, fontWeight: 500 }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                  Back
+                </button>
+              )}
             </div>
+          )
+        )}
 
-            <div style={{ display: "grid", gap: 10 }}>
-              {node.options.map((opt, i) => (
-                <OptionCard
-                  key={opt.label}
-                  icon={opt.icon}
-                  label={opt.label}
-                  desc={opt.desc}
-                  onClick={() => handleSelect(opt)}
-                  index={i}
-                />
-              ))}
-            </div>
+        {activeTab === "calculator" && (
+          <CostCalculatorView tasksPerDay={tasksPerDay} setTasksPerDay={setTasksPerDay} />
+        )}
 
-            {path.length > 0 && (
-              <button
-                onClick={() => {
-                  if (path.length <= 1) { reset(); return; }
-                  const prev = path[path.length - 1];
-                  setPath(path.slice(0, -1));
-                  setCurrentNode(prev.nodeId);
-                  setResultKey(null);
-                }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6, margin: "18px auto 0",
-                  background: "none", border: "none", color: "#6B7280", cursor: "pointer", fontSize: 13, fontWeight: 500
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-                Back
-              </button>
-            )}
-          </div>
+        {activeTab === "benchmarks" && (
+          <BenchmarkExplorerView onSelectBenchmark={(key) => setSelectedBenchmark(key)} />
         )}
 
         <div style={{ textAlign: "center", marginTop: 32, fontSize: 11, color: "#9CA3AF" }}>
-          Based on SWE-bench, Aider, and Terminal-Bench benchmarks · Feb 2026
+          Based on SWE-bench, Aider, and Terminal-Bench benchmarks \u00B7 Feb 2026
         </div>
       </div>
+
+      {selectedBenchmark && (
+        <BenchmarkModal
+          benchKey={selectedBenchmark}
+          onClose={() => setSelectedBenchmark(null)}
+          highlightModel={resultKey ? RESULTS[resultKey]?.model : null}
+        />
+      )}
     </div>
   );
 }
